@@ -1,0 +1,124 @@
+Autorizacion 
+
+• Basic HTTP authentication: In this scheme, user credentials (usually, an identifier
+such as an email address and password) are put into an HTTP header called
+Authorization. The value consists of the Basic keyword, followed by the user
+credentials encoded in Base64. This is a very simple scheme to implement but not
+very secure since the password appears in every request.
+
+• Cookies: Cookies are a useful way to store static data on the client side, usually on
+web browsers, that is sent in each request to the server. Typically, a cookie can contain
+a session token that can be verified by the server and linked to a specific user.
+
+• Tokens in the Authorization header: Probably the most used header in a REST
+API context, this simply consists of sending a token in an HTTP Authorization
+header. The token is often prefixed by a method keyword, such as Bearer. On the
+server side, this token can be verified and linked to a specific user
+
+CryptContext
+
+CryptContext is a very useful class since it allows us to work with different hash
+algorithms. If, one day, a better algorithm than bcrypt emerges, we can just add it to our
+allowed schemes. New passwords will be hashed using the new algorithm, but existing
+passwords will still be recognized (and optionally upgraded to the new algorithm)
+
+Securing endpoints with access tokens
+
+The first thing to notice is that we used the OAuth2PasswordBearer dependency from
+FastAPI. It goes hand in hand with OAuth2PasswordRequestForm, which we saw in
+the previous section. It not only checks for the access token in the Authorization header,
+but it also informs the OpenAPI schema that the endpoint to get a fresh token is /token.
+This is the purpose of the tokenUrl argument. This is how the automatic documentation
+can automatically call the access token endpoint in the login form we saw earlier
+
+Understanding CORS and configuring it in FastAPI
+
+Clearly, both the GET and POST requests have been received and processed: we even
+returned a 200 status. So, what does this mean? In this case, the browser does send the
+request to the server. The lack of a CORS policy only forbids it to read the response; the
+request is still executed.
+It happens for requests that the browser considers as simple requests. Simply put, simple
+requests are the ones using the methods GET, POST or HEAD that don't set custom
+headers or unusual content types. You can learn more about simple requests and their
+conditions by going to the following MDN page about CORS: https://developer.
+mozilla.org/en-US/docs/Web/HTTP/CORS#simple_requests
+
+This means that, for simple requests, the same-origin policy is not enough to protect us
+against CSRF attacks
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:9000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    max_age=-1, # Only for the sake of the example.
+# Remove this in your own project.
+)
+
+A middleware is a special class that adds global logic to an ASGI application performing
+things before the request is handled by your path operation functions, and also after to
+possibly alter the response. FastAPI provides the add_middleware method for wiring
+such middleware into your application.
+Here, CORSMiddleware will catch preflight requests sent by the browser and return the
+appropriate response with the CORS headers corresponding to your configuration. You
+can see that there are options to finely tune the CORS policy to your needs
+
+The most important one is probably allow_origins, which is the list of origins allowed
+to make requests to your API. Since our HTML application is served from http://
+localhost:9000, this is what we put here in this argument. If the browser tries to
+make requests from any other origin, it will stop as it's not authorized to do so by
+CORS headers.
+
+The other interesting argument is allow_credentials. By default, browsers don't
+send cookies for cross-origin HTTP requests. If we wish to make authenticated requests to
+our API, we need to allow this via this option.
+
+We can also finely tune the allowed methods and headers that are sent in the request.
+You can find a complete list of arguments for this middleware in the official Starlette
+documentation: https://www.starlette.io/middleware/#corsmiddleware.
+
+
+Implementing double-submit cookies to prevent CSRF attacks
+
+For all these reasons, we need to have another layer of security to mitigate this risk. Once
+again, this is only necessary if you plan to use your API from a browser application and
+use cookies for authentication.
+
+ pip install starlette-csrf
+
+Notice that we used the Secure and HttpOnly flags for the resulting cookie. This
+ensures that it's sent only through HTTPS connection and that its value can't be read
+from JavaScript, respectively. While this is not enough to prevent every kind of attack,
+it's crucial for such sensitive information.
+Besides, we also set the SameSite flag to lax. It's a quite recent flag that allows us to
+control how the cookie is sent in a cross-origin context. lax is the default value in most
+browsers and allows the cookie to be sent to sub-domains of the cookie domain but
+prevent it for other sites. In a sense, it's designed to be the built-in and standard protection
+against CSRF. However, other CSRF mitigation techniques, like the one we'll implement
+here, are still needed currently. Indeed, older browsers that are not compatible with the
+SameSite flag are still vulnerable.
+
+Now, when checking for the authenticated user, we'll just have to retrieve the token
+from the cookie that was sent in the request. Once again, FastAPI provides a security
+dependency to help with this called APIKeyCookie.
+
+The implementation is not very surprising and follows what we've seen so far. However,
+it exposes us to a CSRF threat. As you can see, it uses the POST method. If we make a
+request in the browser to this endpoint, without any special header, it will consider it as a
+simple request and execute it. Therefore, an attacker could change the email of a currently
+authenticated user, which is a major threat.
+
+This is exactly why we need CSRF protection here. In the context of a REST API, the most
+straightforward technique is the double submit cookie pattern. Here is how it works:
+1. The user makes a first request with a method that's considered safe. Typically,
+this is a GET request.
+2. In response, it receives a cookie containing a secret random value; that is,
+the CSRF token.
+3. When making an unsafe request, such as POST, the user will read the CSRF token
+in the cookies and put the exact same value in a header. Since the browser also
+sends the cookies it has in memory, the request will contain the token both in the
+cookie and the header. That's why it's called double submit.
+4. Before processing the request, the server will compare the CSRF token provided
+in the header with the one present in the cookie. If they match, it can process the
+request. Otherwise, it'll throw an error.

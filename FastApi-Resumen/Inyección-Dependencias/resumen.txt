@@ -1,0 +1,72 @@
+Depends -> es utilizado en endpoints donde se necesite el uso de dependencias
+
+Note: In the case of a dependency, we use
+the Depends function. Its role is taking a function in the argument and execute
+it when the endpoint is called. The sub-dependencies are automatically discovered
+and executed.
+We define them exactly
+like we would have done on a path operation function. That's the beauty of this
+approach: FastAPI will recursively handle the arguments on the dependency and
+match them with the request data, such as query parameters or headers, if needed
+
+Since the arguments of the function are set by the dependency injection
+system, we can't add an argument to the function.
+
+Para usar parametros dinámicos se utilizan las clases como argumentos de la 
+funcion Depends. Se pueden pasar metodos de clases como argumentos a Depends.
+
+
+Use a dependeny on a path decorator
+
+The path operation decorator accepts an argument, dependencies, which expects a list
+of dependencies. You see that, just like for dependencies you pass in arguments, you need
+to wrap your function (or callable) with the Depends function.
+Now, whenever the /protected-route route is called, the dependency will be called
+and will check for the required header.
+As you may have guessed, since dependencies is a list, you can add as many
+dependencies as you need.
+That's interesting, but what if we want to protect a whole set of endpoints? It would be a
+bit cumbersome and error-prone to add it manually on each one. Fortunately, FastAPI
+provides a way to do that
+
+
+Use a dependency on a whole router
+
+With this approach, it can be interesting to inject a dependency on the whole router, so
+that it's called for every route of this router. You have two ways of doing this:
+
+• Set the dependencies argument on the APIRouter class, as you can see in the
+following example:
+router = APIRouter(dependencies=[Depends(secret_header)])
+@router.get("/route1")
+async def router_route1():
+return {"route": "route1"}
+@router.get("/route2")
+async def router_route2():
+return {"route": "route2"}
+app = FastAPI()
+app.include_router(router, prefix="/router")
+
+• Set the dependencies argument on the include_router method, as you can
+see in the following example:
+router = APIRouter()
+@router.get("/route1")
+async def router_route1():
+return {"route": "route1"}
+@router.get("/route2")
+async def router_route2():
+return {"route": "route2"}
+app = FastAPI()
+app.include_router(router, prefix="/router",
+dependencies=[Depends(secret_header)]
+
+
+Use a dependency on a whole application
+
+app = FastAPI(dependencies=[Depends(secret_header)])
+@app.get("/route1")
+async def route1():
+return {"route": "route1"}
+@app.get("/route2")
+async def route2():
+return {"route": "route2"}

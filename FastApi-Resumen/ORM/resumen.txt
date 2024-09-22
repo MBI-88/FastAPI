@@ -1,0 +1,202 @@
+ORM
+
+NoSQL databases
+
+All database engines that are not relational fall back into the NoSQL category. In fact, this
+is a quite vague denomination that regroups different families of databases: key-value
+stores, such as Redis; graph databases, such as Neo4j; and document-oriented databases,
+such as MongoDB. That said, most of the time when we talk about "NoSQL databases",
+we are implicitly referring to document-oriented databases. They are the ones that interest
+us in this chapter
+
+
+Which one should you choose?
+
+As we mentioned in the introduction to this section, the choice of database engine
+greatly depends on your application and needs. A detailed comparison between relational
+and document-oriented databases is beyond the scope of this book, but here are some
+elements for you to think about.
+Relational databases are very good for storing structured data with a lot of relationships
+between the entities. Besides, they maintain data consistency at all costs, even in the event
+of errors or hardware failures. However, you'll have to precisely define your schema and
+consider a migration system to update your schema if your needs evolve
+
+On the other hand, document-oriented databases don't require you to define a schema:
+they accept any document structure, so it can be convenient if your data is highly variable
+or if your project is not mature enough. The downside of this is that they are far less picky
+in terms of data consistency, which could result in data loss or inconsistencies.
+For small and medium-sized applications, the choice doesn't really matter: both relational
+databases and document-oriented databases are very optimized and will deliver awesome
+performance at such scales
+
+SQLAlchemy
+
+Note: • You can find the list of types at https://docs.sqlalchemy.org/en/13/
+core/type_basics.html#generic-types
+• You can find the list of Column arguments at https://docs.sqlalchemy.
+org/en/13/core/metadata.html#:~:text=sqlalchemy.schema.
+Column.__init__
+
+You can find an overview of this
+format in the official SQLAlchemy documentation at https://docs.sqlalchemy.
+org/en/13/core/engines.html#database-urls. In the case of SQLite,
+we simply have to give the path of the file that will store all of the 
+
+By default, the file defines a variable named target_metadata, which is set to None.
+Here, we changed it so that it refers to the metadata object that we just imported
+from our models module. But why do we do that? Well, remember that metadata is
+a SQLAlchemy object that contains all the table definitions. By providing it to Alembic,
+the migration system will be able to automatically generate the migration scripts just
+by looking at your schema! This way, you won't have to write them from scratch.
+When you have made changes to your database schema, you can run the following
+command to generate a new migration script:
+
+ alembic revision --autogenerate -m "Initial migration"
+
+ Note: Autogenerate doesn't detect everything
+Bear in mind that, even though autogeneration is very helpful, it's not always
+accurate, and, sometimes, it's not able to detect ambiguous changes. For
+example, if you rename a column, it will delete the old one and create another.
+As a result, the data for this column will be lost! This is why you should always
+carefully review the migration scripts and make the required changes for edge
+cases like this
+
+Finally, you can apply the migrations to your database using the following command:
+$ alembic upgrade head
+
+
+Tortoise ORM 
+
+If you need drivers for database engines such as PostgreSQL or MySQL, you can
+install them, as explained in the documentation at https://tortoise-orm.
+readthedocs.io/en/latest/getting_started.html#installation
+
+documentation : https://tortoise-orm.readthedocs.io/en/latest/fields.html.
+
+***El uso de la sub clase  Config es esencial para convertir de un objeto ORM a Pydantic 
+
+
+Setting up the Tortoise engine
+
+Now that we have our model ready, we have to configure the Tortoise engine to set the
+database connection string and the location of our models. To do this, Tortoise comes
+with a utility function for FastAPI that does all the required tasks for you. In particular,
+it automatically adds event handlers to open and close the connection at startup and
+shutdown; this is something we had to do by hand with SQLAlchemy
+
+As you can see, we put the main configuration options in a variable named TORTOISE_
+ORM. Let's review its different fields:
+• The connections key contains a dictionary associating a database alias to
+a connection string, which gives access to your database. It follows the standard
+convention, as explained in the documentation at https://tortoise-orm.
+readthedocs.io/en/latest/databases.html?highlight=db_
+url#db-url.
+In most projects, you'll probably have one database named default, but it allows
+you to set several databases if needed.
+• In the apps key, you'll be able to declare all your modules containing your Tortoise
+models. The first key just below apps, that is, models, will be the prefix with
+which you'll be able to refer to the associated models. You can name it how you
+want, but if you place all your models under the same scope, then models is
+a good candidate. This prefix is especially important when defining foreign keys.
+For example, with this configuration, our PostTortoise model can be referred to
+by the name models.PostTortoise. It's not the actual path to your module.
+Underneath it, you have to list all the modules containing your models.
+Additionally, we set the corresponding database connection with the alias
+we defined earlier
+
+Then, we call the register_tortoise function that'll take care of setting up Tortoise
+for FastAPI. Let's explain its arguments:
+• The first one is your FastAPI app instance.
+• Then, we have the configuration that we defined earlier.
+• Setting generate_schemas to True will automatically create the table's schema
+in the database. Otherwise, our database will be empty and we won't be able to
+insert any rows.
+While this is useful for testing purposes, in a real-world application, you should
+have a proper migration system whose role is to make sure your database schema
+is in sync. We'll examine how to set one up for Tortoise later in the chapter.
+• Finally, the add_exception_handlers option adds custom exception handlers
+to FastAPI, allowing you to nicely catch Tortoise errors and return proper
+error responses
+
+And that's all! Always make sure that you call this function at the end of your application
+file, to ensure everything has been correctly imported. Apart from that, Tortoise handles
+everything for us. We're now ready to go!
+
+Can we return a PostTortoise object directly?
+
+Technically, yes, we can. In the case of a Tortoise model, it implements the
+magic methods to be transformed into a dictionary, which is the last fallback
+of FastAPI when it doesn't recognize the object you have returned. However,
+doing this would deprive us of all the goodness of using Pydantic models, such
+as field exclusion or automatic documentation. This is why we recommend here
+that you always go back to a Pydantic model
+
+That's almost it for the basics of working with Tortoise ORM. Of course, we only covered
+the most basic queries, but you can do far more complex things. You can find a thorough
+overview of the query language in the official documentation at https://tortoiseorm.readthedocs.io/en/latest/query.html#query-api
+
+Para iniciar las migraciones
+
+aerich init -t chapter6.tortoise_relationship.app.TORTOISE_ORM
+
+aerich init-db
+
+To apply the migrations to your database, simply run the following command:
+aerich upgrade
+
+During the life of your project, when you have made changes to your table's schema,
+you'll have to generate new migration scripts to reflect the changes. This is done quite
+easily using the following command:
+
+aerich migrate --name added_new_tables
+
+The --name option allows you to set a name for your migration. It will automatically
+generate a new migration file that reflects your changes.
+
+**Aerich migration scripts are not cross-database compatible
+Contrary to Alembic, Aerich doesn't abstract migration operations through
+cross-compatible Python scripts. Instead, it directly generates SQL files that are
+compatible with the engine you are working with. Since there are significant
+differences between the various SQL implementations, you can't work, for
+example, on a SQLite database during development and have a PostgreSQL
+for production: the migration scripts generated locally wouldn't work on your
+production server. This is why you should have the same database engine both
+in local and in production
+
+
+MongoDB 
+
+Creating models compatible with MongoDB ID
+
+As we mentioned in the introduction to this section, there are some difficulties with the
+identifiers that MongoDB uses to store documents. Indeed, by default, MongoDB assigns
+every document an _id property that acts as a unique identifier in a collection. This
+causes two issues:
+• In a Pydantic model, if a property starts with an underscore, it's considered to be
+private and, thus, is not used as a data field for our model.
+• _id is encoded as a binary object, called ObjectId, instead of a simple
+integer or string. It's usually represented in the form of a string such as
+608d1ee317c3f035100873dc. This type of object is not supported out of the
+box by Pydantic or FastAPI.
+
+The most interesting argument is alias. It's a Pydantic option allowing us to change the
+name of the field during serialization. In this example, when we call the dict method on
+one instance of MongoBaseModel, the identifier will be set on the _id key; this is the
+name expected by MongoDB. That solves the first issue
+
+Then, we add the Config sub-class and set the json_encoders option. By default,
+Pydantic is completely unaware of our PyObjectId type, so it won't be able to correctly
+serialize it to JSON. This option allows us to map custom types with a function that will
+be called to serialize them. Here, we simply transform it into a string (it works because
+ObjectId implements the __str__ magic method). That solves the second issue
+for Pydantic.
+
+Here, you can see that AsyncIOMotorClient simply expects a connection string to
+your database. Generally, it consists of the scheme, followed by authentication information
+and the hostname of the database server. You can find an overview of this format in
+the official MongoDB documentation at https://docs.mongodb.com/manual/
+reference/connection-string/.
+
+You can find a description of every update operator in the
+official documentation at https://docs.mongodb.com/manual/reference/
+operator/update/.

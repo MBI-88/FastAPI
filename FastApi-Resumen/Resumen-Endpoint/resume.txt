@@ -1,0 +1,115 @@
+Validadores
+
+Enum -> es usado para validar parametros especificos
+
+Path -> es usado para validar strings y integers
+parametros:
+• gt: Greater than
+• ge: Greater than or equal to
+• lt: Less than
+• le: Less than or equal to
+
+min_length and max_length: para limitar extremos
+regex: para usar expresiones regulares
+
+
+Queries -> es usado para validar parametros en la query 
+(similar a Path, tiene sus mismos parametros)
+Puede recibir un diccionario de parametros
+
+
+Body -> es usado para extraer parametros del cuerpo de la
+petición en metodos post,update,delete
+
+Note: However, defining payload validations like this has some major drawbacks. First, it's quite
+verbose and makes the path operation function prototype huge, especially for bigger
+models. Second, usually, you'll need to reuse the data structure on other endpoints or in
+other parts of your application.
+
+This is why FastAPI uses pydantic models for data validation. Pydantic is a Python library
+for data validation and is based on classes and type hints. In fact, the Path, Query, and
+Body functions that we've learned about so far use pydantic under the hood!
+
+
+Form -> se utiliza para extraer información codificada como application/x-www-form-urlencoded or multipart/form-data
+Tiene los mismos parametros que Path, Query y Body
+
+File -> se utiliza para subir archivos pequeños 
+
+Note: One drawback to this approach is that the uploaded file is entirely stored in memory. So,
+while it'll work for small files, it is likely that you'll run into issues for larger files. Besides,
+manipulating a bytes object is not always convenient for file handling.
+To fix this problem, FastAPI provides an UploadFile class. This class will store the data
+in memory up to a certain threshold and, after this, will automatically store it on disk in
+a temporary location. This allows you to accept much larger files without running out of
+memory. Furthermore, the exposed object instance exposes useful metadata, such as the
+content type, and a file-like interface. This means that you can manipulate it as a regular
+file in Python and that you can feed it to any function that expects a file.
+
+Cookie -> es utilizado para procesos de autenticación, permite establecer valores a la Cookie
+
+Request -> extrae toda la informacion que viene en la petición
+
+
+Note: It's important to understand that this option to override the status code is only useful
+when everything goes well. Even if your input data was invalid, you would still get a
+422 status error response
+
+response_model -> define el tipo de respuesta que va a tener la ruta 
+
+Note: The nb_views property is no longer there! Thanks to the response_model option,
+FastAPI automatically converted our Post instance into a PublicPost instance before
+serializing it. Now our private data is safe!
+
+
+Response -> develve la respuesta en json (personalisable). Modifica headers.
+Es una clase general para todo tipo de respuesta
+
+HTTPExdeption -> captura errores en la ruta 
+
+
+Tipos de clases para Respuesta 
+
+• HTMLResponse: This can be used to return an HTML response.
+• PlainTextResponse: This can be used to return raw text.
+• RedirectResponse: This can be used to make a redirection.
+• StreamingResponse: This can be used to stream a flow of bytes.
+• FileResponse: This can be used to automatically build a proper file response
+given the path of a file on the local disk
+
+Note: You have two ways of using them: either setting the response_class argument on the
+path decorator or directly returning a response instance
+
+RedirectResponse -> cambia la ruta actual a una nueva ruta 
+
+FileResponse -> sirve archivos
+
+Extructura de un proyecto:
+.
+└── chapter3_project/
+    ├── models/
+    │ ├── __init__.py
+    │ ├── post.py
+    │ └── user.py
+    ├── routers/
+    │ ├── __init__.py
+    │ ├── posts.py
+    │ └── users.py
+    ├── __init__.py
+    ├── app.py
+    └── db.py
+
+Note: As usual, we instantiate the FastAPI class. Then, we use the include_router method
+to add our sub-router. You can see that we simply imported the router from its relevant
+module and used it as the first argument of include_router. Notice that we used the
+synta as while importing. Since both users and posts routers are named
+the same inside their module, this syntax allows us to alias their name and, thus, avoid
+name collision.
+Additionally, you can see that we set the keyword argument as prefix. This allows us
+to prefix the path of all the endpoints of this router. This way, you don't have to hardcode
+it in the router logic and can easily change it for the whole router. It can also be used to
+provide versioned paths of your API, such as /v1.
+
+Finally, the tags argument helps you to group endpoints in the interactive
+documentation for better readability. By doing this, the posts and users endpoints will
+be clearly separated in the documentation.

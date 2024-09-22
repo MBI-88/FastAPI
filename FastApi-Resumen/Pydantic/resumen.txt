@@ -1,0 +1,96 @@
+Pydantic -> es usado para definir tipos de datos 
+
+Note: We just have to define another Pydantic model and use it as a type hint. Now, you can
+either instantiate a Person instance with an already valid Address instance or, even
+better, with a dictionary. In this case, Pydantic will automatically parse it and validate it
+against the address model.
+
+
+Optional -> es usado para casos en los que el dato puede o no puede estar 
+
+Field -> es usado para validar datos en los modelos 
+
+Note: As you see, the syntax is very similar to the one we saw for Path, Query, and Body.
+The first positional argument defines the default value for the field. If the field is required,
+we use the ellipsis .... Then, the keyword arguments are there to set options for the field,
+including some basic validation.
+
+Dynamic defatult values
+
+In the previous section, we warned you about setting dynamic values as defaults.
+Fortunately, Pydantic provides the default_factory argument on the Field
+function to cover this use case. This argument expects you to pass a function that will be
+called during model instantiation.
+
+Notice also that the first positional argument used for the default value (such as None or
+...) is completely omitted here. This makes sense: it's not consistent to have both a default
+value and a factory. Pydantic will raise an error if you set those two arguments together.
+
+EmailStr -> es usado para validación de emails
+HttpUrl -> es usado para validación de urls
+
+Note: Pydantic provides a quite big set of types that can help you in various situations. We invite
+you to review a full list of these in the official documentation, at https://pydanticdocs.helpmanual.io/usage/types/#pydantic-types.
+
+
+Custom data validation with Pydantic 
+
+Applying validation at a field level
+
+This is the most common case: have a validation rule for a single field. To define it in
+Pydantic, we'll just have to write a static method on our model and decorate it with
+the validator decorator. As a reminder, decorators are syntactic sugar, allowing the
+wrapping of a function or a class with common logic, without compromising readability.
+
+Applying validation at an object level
+
+It happens quite often that the validation of one field is dependent on another—for
+example, to check if a password confirmation matches the password or to enforce a field
+to be required in certain circumstances. To allow this kind of validation, we need to access
+the whole object data.
+
+Applying validation before Pydantic parsing
+
+By default, your validators are run after Pydantic has done its parsing work. This means
+that the value you get already conforms to the type of field you specified. If the type is
+incorrect, Pydantic raises an error without calling your validator.
+However, you may sometimes wish to provide some custom parsing logic that allows you
+to transform input values that would have been incorrect for the type you set. In that case,
+you would need to run your validator before the Pydantic parser: this is the purpose of the
+pre argument on validator
+
+Converting an object into a dictionary
+
+This is probably the action you'll perform the most on a Pydantic object: convert it to a
+raw dictionary that'll be easy to send to another API or use in a database, for example.
+You just have to call the dict method on the object instance
+
+As you see, calling dict is enough to transform the whole data into a dictionary.
+Sub-objects are also recursively converted: the address key points itself to a dictionary
+with the address properties.
+
+Interestingly, the dict method supports some arguments, allowing you to select a subset
+of properties to be converted.
+The include and exclude arguments expect a set with the keys of the fields you want
+to include or exclude
+
+Updating an instance with a partial one
+
+In some situations, you'll want to allow partial updates. In other words, you'll allow the
+end user to only send the fields they want to change to your API and omit the ones that
+shouldn't change. This is the usual way of implementing a PATCH endpoint.
+To do this, you would first need a special Pydantic model with all the fields marked as
+optional so that no error is raised when a field is missing. Let's see what this looks like
+with our Post example, as follow
+
+Note: Now for the interesting part: updating the existing object. You see that the first thing we
+do is transform PostPartialUpdate into a dictionary with the dict method. This
+time, however, we set the exclude_unset argument to True. The effect of this is that
+Pydantic won't output the fields that were not provided in the resulting dictionary: we
+only get the fields that the user did send in the payload
+
+Then, on our existing post_db database instance, we call the copy method. This is a
+useful method to clone a Pydantic object into another instance. The nice thing about this
+method is that it even accepts an update argument. This argument expects a dictionary
+with all the fields that should be updated during the copy: that's exactly what we want to
+do with our updated_fields dictionary!

@@ -1,0 +1,82 @@
+Understanding the principles of two-way communication with WebSockets
+
+WebSockets try to solve that by opening a full-duplex communication channel, meaning
+that messages can be sent in both directions and possibly at the same time. Once the
+channel is opened, the server can send messages to the client without having to wait for
+a request from the client.
+
+Even if HTTP and WebSocket are different protocols, WebSockets have been designed
+to work with HTTP. Indeed, when opening a WebSocket, the connection is first
+initiated using an HTTP request and then upgraded to a WebSocket tunnel. This makes
+it compatible out of the box with traditional 80 and 443 ports, which is extremely
+convenient because we can easily add this feature over existing web servers without the
+need for an extra process.
+
+WebSockets also share another similarity with HTTP: Uniform Resource Identifiers
+(URIs). As with HTTP, WebSockets are identified through classic URIs, with a host,
+a path, and query parameters. Furthermore, we also have two schemes: ws (WebSocket)
+for unsecure connections and wss (WebSocket Secure) for Secure Sockets Layer/
+Transport Layer Security (SSL/TLS)-encrypted connections.
+
+
+First of all, you see that FastAPI provides a special websocket decorator to create a
+WebSocket endpoint. As for regular endpoints, it takes as an argument the path at which
+it'll be available. However, other arguments not making sense in this context, such as the
+status code or response model, are not available.
+
+The first method we are calling in the implementation is accept. This method should be
+called first as it tells the client that we agree to open the tunnel
+
+Inside the loop, we make a first call to the receive_text method. As you may have
+guessed, this returns us the data sent by the client in plain text format. It's important here
+to understand that this method will block until data is received from the client. Until that
+event, we won't proceed with the rest of the logic.
+
+Handling concurrency
+
+To solve this, we'll rely on more advanced tools of the asyncio module. Indeed, it
+provides functions that allow us to schedule several coroutines concurrently and wait
+until one of them is complete. In our context, we can have a coroutine that waits for client
+messages and another one that sends data to it when it arrives. The first one being fulfilled
+wins and we can start again with another loop iteration.
+
+The most interesting part lives under the infinite loop: as you can see, we call our two
+functions, wrapped by the create_task function of asyncio. This transforms the
+coroutine into a Task object. Under the hood, a task is how the event loop manages the
+execution of the coroutine. Put more simply, it gives us full control over the execution of
+the coroutine, to retrieve its result or even cancel it.
+
+Those task objects are necessary to work with asyncio.wait. This function is
+especially useful to run tasks concurrently. It expects in the first argument a set of tasks to
+run. By default, this function will block until all given tasks are completed. However, we
+can control that thanks to the return_when argument: in our case, we want it to block
+until one of the tasks is completed, which corresponds to the FIRST_COMPLETED value.
+The effect is the following: our server will launch the coroutines concurrently. The first
+one will block waiting for a client message, while the other one will block for 10 seconds.
+If the client sends a message before 10 seconds, it'll send the message back and complete.
+Otherwise, the send_time coroutine will send the current time and complete
+
+At that point, asyncio.wait will return us two sets: the first one, done, contains a set of
+completed tasks, while the other one, pending, contains a set of tasks not yet completed.
+
+
+Using dependencies
+
+Meanwhile, it's recommended to make all your WebSocket dependencies optional and
+handle missing values yourself
+
+
+Handling multiple WebSocket connections and broadcasting messages
+
+To solve this, we generally rely on message brokers. Message brokers are pieces of
+software whose role is to receive messages published by a first program and broadcast
+them to programs that are subscribed to it. Usually, this publish-subscribe (pub-sub)
+pattern is organized into different channels so that messages are clearly organized
+following their topic or usage. Some of the best-known message broker software includes
+Apache Kafka, RabbitMQ, or cloud-based implementations from Amazon Web Services
+(AWS), Google Cloud Platform (GCP) and Microsoft Azure: Amazon MQ, Cloud Pub/
+Sub and Service Bus, respectively.
+
+ pip install "broadcaster[redis]"
+
+ 

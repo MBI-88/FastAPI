@@ -1,0 +1,107 @@
+Setting and using environment variables
+
+To help us with this task, we'll use a very convenient feature of Pydantic: settings
+management. This allows us to structure and use our configuration variables as we do
+for any other data model. It even takes care of automatically retrieving the values from
+environment variables!
+
+To structure a settings model, all you need to do is create a class that inherits from
+pydantic.BaseSettings. The following example shows a configuration class
+with a debug flag, an environment name, and a database URL
+
+As you can see, creating this class is very similar to creating a standard Pydantic model. We
+can even define default values, as we did for debug here. The good thing with this model is
+that it works just like any other Pydantic model: it automatically parses the values it finds in
+environment variables and raises an error if one value is missing in your environment. This
+way, you can ensure you don't forget any values directly when the app starts.
+
+Using a .env file
+
+In local development, it's a bit annoying to set environment variables by hand, especially
+if you're working on several projects at the same time on your machine. To solve this,
+Pydantic allows you to read the values from a .env file. This file contains a simple
+list of environment variables and their associated values. It's usually easier to edit and
+manipulate during development.
+To make this work, we'll need a new library, python-dotenv, whose task is to parse
+those .env files. You can install it as usual with the following command:
+
+pip install python-dotenv
+
+
+Adding Gunicorn as a server process for deployment
+
+In the WSGI world, the most widely used server is Gunicorn. It has the same role in the
+context of a Django or Flask application. Why are we talking about it, then? Gunicorn
+has lots of refinements and features that make it more robust and reliable in production
+than Uvicorn. However, Gunicorn is designed to work for WSGI applications. So, what
+can we do?
+Actually, we can use both: Gunicorn will be used as a robust process manager for our
+production server. However, we'll specify a special worker class provided by Uvicorn,
+which will allow us to run ASGI applications such as FastAPI. This is the recommended
+way of doing deployments in the official Uvicorn documentation: https://www.
+uvicorn.org/deployment/#using-a-process-manager
+
+pip install gunicorn
+
+gunicorn -w 4 -k uvicorn.workers.UvicornWorker app.app:app
+
+Its usage is quite similar to Uvicorn, except that we tell it to use a Uvicorn worker.
+Once again, this is necessary to make it work with an ASGI application. Also, notice the
+-w option. It allows us to set the number of workers to launch for our server. Here, we
+launch four instances of our application. Then, Gunicorn takes care of load balancing the
+incoming requests between each worker. This is what makes Gunicorn more robust: if, for
+any reason, your application blocks the event loop with a synchronous operation, other
+workers will be able to process other requests while this is happening.
+
+
+Writing a Dockerfile
+
+contenido del dockerfile:
+
+FROM tiangolo/uvicorn-gunicorn-fastapi:python3.7
+ENV APP_MODULE app.app:app
+COPY requirements.txt /app
+RUN pip install --upgrade pip && \
+    pip install -r /app/requirements.txt
+COPY ./ /app
+
+Then, we set the APP_MODULE environment variable thanks to the ENV instruction.
+In a Docker image, environment variables can be set at build time, as we did here, or at
+runtime. APP_MODULE is an environment variable defined by the base image. It should
+point to the path of your FastAPI application: it's the same argument that we set at the end
+of Uvicorn and Gunicorn commands to launch the application. You can find the list of all
+the accepted environment variables for the base image in the official README
+
+Next, we have our first COPY statement. As you may have guessed, this instruction
+will copy a file from your local system to the image. Here, we only copied our
+requirements.txt file. We'll explain why shortly. Notice that we copied the file into the
+/app directory of the image; it's the main working directory defined by the base image.
+We then have a RUN statement. This instruction is used to execute Unix commands. In our
+case, we ran pip to install our dependencies, following the requirements.txt file we
+just copied. This is essential to make sure all our Python dependencies are present.
+Finally, we copied the rest of our source code files into the /app directory. Now, let's
+explain why we separately copied requirements.txt. The important thing to
+understand is that Docker images are built using layers: each instruction will create a new
+layer in the build system. To improve performance, Docker does its best to reuse layers it
+has already built. Therefore, if it detects no changes from the previous build, it'll reuse the
+ones it has in memory without rebuilding them.
+
+By copying the requirements.txt file alone and installing the Python dependencies
+before the rest of the source code, we allow Docker to reuse the layer where the
+dependencies have been installed. If we edit our source code but not requirements.
+txt, the Docker build will only execute the last COPY instruction, reusing all the previous
+layers. Thus, the image is built in a few seconds instead of minutes.
+
+Most of the time, Dockerfiles end with a CMD instruction, which should be the command
+to execute when the container is started. In our case, we would have used the Gunicorn
+command we saw in the Adding Gunicorn as a server section. However, in our case, the
+base image is already handling this for us.
+
+Building a Docker image
+
+docker build -t fastapi-app .
+
+The dot (.) denotes the path of the root context to build your image – in this case, the
+current directory. The -t option is here to tag the image and give it a practical name
+
+
